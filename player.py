@@ -1,10 +1,12 @@
-from flask import Flask, request
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 from multiprocessing import Process, Manager, Value
 import time
 import requests
 import json
 
 app = Flask(__name__)
+CORS(app)
 
 @app.route("/current_time")
 def get_current_time():
@@ -12,7 +14,13 @@ def get_current_time():
     current_time = current_player_time.value
   else:
     current_time = 0
-  return 'Song is currently at {} seconds'.format(current_time)
+  return str(current_time)
+
+@app.route("/get_timestamped_url")
+def get_timestampted_url():
+  url = 'https://youtube.com/watch?v=' + get_current_song()[0] + '?t=' + get_current_time()
+  print(url)
+  return jsonify({'url': url})
 
 # TODO: improve timing to use static end time and delta
 def player(player_time_queue, current_player_time):
@@ -29,7 +37,6 @@ def player(player_time_queue, current_player_time):
       current_player_time.value = current_time
     current_time = 0
     mark_song_played(song)
-    time.sleep(1)
 
 # returns tuple of the id and duration in seconds
 def get_current_song():
@@ -38,7 +45,15 @@ def get_current_song():
   response = requests.get(request_url)
   song = response.text
   if (song == "None"):
-    return "None"
+    # playlist has played through, reset
+    request_url = "http://127.0.0.1:5002/reset_playlist"
+    response = requests.get(request_url)
+
+    # get first song
+    request_url = "http://127.0.0.1:5002/current_song"
+    response = requests.get(request_url)
+    song = response.text
+    
   request_url = "http://127.0.0.1:5003/song_info/" + song
   response = requests.get(request_url)
   song_dict = json.loads(response.text)
